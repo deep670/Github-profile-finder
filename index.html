@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Profile Finder</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & Babel -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    animation: {
+                        'float': 'float 6s ease-in-out infinite',
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translate3d(0,0,0)' },
+                            '50%': { transform: 'translate3d(0,-10px,0)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        
+        .skeleton {
+            background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+        }
+        
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        
+        .glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .glass-dark {
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(148, 163, 184, 0.3);
+        }
+        
+        .gradient-border {
+            background: linear-gradient(45deg, #3b82f6, #8b5cf6, #06b6d4, #10b981);
+            background-size: 400% 400%;
+            animation: gradientShift 15s ease infinite;
+        }
+        
+        @keyframes gradientShift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+        
+        .repo-card-hover {
+            transform: translateY(-8px);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 min-h-screen">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const GitHubProfileFinder = () => {
+            const [username, setUsername] = useState('');
+            const [profile, setProfile] = useState(null);
+            const [repos, setRepos] = useState([]);
+            const [followers, setFollowers] = useState([]);
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState(null);
+            const [darkMode, setDarkMode] = useState(true);
+            const [activeTab, setActiveTab] = useState('repos');
+            const [searchFocused, setSearchFocused] = useState(false);
+
+            useEffect(() => {
+                const savedTheme = localStorage.getItem('darkMode');
+                if (savedTheme) setDarkMode(savedTheme === 'true');
+            }, []);
+
+            useEffect(() => {
+                // Updated backgrounds for better readability
+                const bodyClass = darkMode 
+                    ? 'bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950' 
+                    : 'bg-gradient-to-br from-slate-50 via-blue-50/50 to-slate-100';
+                document.body.className = bodyClass + " min-h-screen transition-all duration-500";
+                localStorage.setItem('darkMode', darkMode);
+            }, [darkMode]);
+
+            const fetchProfile = async () => {
+                if (!username.trim()) {
+                    setError('Please enter a GitHub username');
+                    return;
+                }
+
+                setLoading(true);
+                setError(null);
+                setProfile(null);
+                
+                try {
+                    const [profileRes, reposRes] = await Promise.all([
+                        fetch(`https://api.github.com/users/${username}`),
+                        fetch(`https://api.github.com/users/${username}/repos?sort=updated&per_page=6`)
+                    ]);
+
+                    if (!profileRes.ok) throw new Error('User not found');
+                    
+                    const profileData = await profileRes.json();
+                    const reposData = await reposRes.json();
+                    
+                    setProfile(profileData);
+                    setRepos(reposData);
+
+                    const followersRes = await fetch(profileData.followers_url);
+                    const followersData = await followersRes.json();
+                    setFollowers(followersData);
+
+                } catch (err) {
+                    setError(err.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                fetchProfile();
+            };
+
+            const toggleTheme = () => setDarkMode(!darkMode);
+            const formatDate = (dateString) => new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            
+            const getLanguageColor = (language) => {
+                const colors = {
+                    JavaScript: '#f7df1e',
+                    TypeScript: '#3178c6',
+                    Python: '#3776ab',
+                    Java: '#007396',
+                    C: '#a8b9cc',
+                    Cpp: '#f34b7d',
+                    PHP: '#787cb5',
+                    Ruby: '#701516',
+                    Go: '#00ADD8',
+                    Rust: '#DEA584',
+                    HTML: '#e34c26',
+                    CSS: '#1572B6'
+                };
+                return colors[language] || '#6b7280';
+            };
+
+            return (
+                <div className="min-h-screen relative overflow-hidden">
+                    {/* Updated Animated Background Particles - Less transparent for better contrast */}
+                    <div className="absolute inset-0 pointer-events-none">
+                        <div className="absolute top-20 left-10 w-72 h-72 bg-purple-500/20 rounded-full blur-3xl animate-pulse-slow"></div>
+                        <div className="absolute top-1/2 right-20 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl animate-pulse-slow delay-1000"></div>
+                        <div className="absolute bottom-40 left-1/2 w-80 h-80 bg-indigo-500/20 rounded-full blur-3xl animate-pulse-slow delay-500"></div>
+                    </div>
+
+                    {/* Navbar */}
+                    <nav className="fixed w-full z-50 border-b backdrop-blur-2xl">
+                        <div className="max-w-6xl mx-auto px-6 h-20 flex justify-between items-center">
+                            <div className="flex items-center gap-4 group">
+                                <div className="relative">
+                                    <i className="fa-brands fa-github text-4xl bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent animate-float"></i>
+                                    <div className="absolute -inset-2 bg-gradient-to-r from-purple-500/30 to-blue-500/30 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-all duration-500"></div>
+                                </div>
+                                <div>
+                                    <h1 className="font-black text-2xl bg-gradient-to-r from-white to-slate-200 bg-clip-text text-transparent">GITHUB</h1>
+                                    <p className="text-xs font-medium text-slate-400 tracking-wider uppercase">Profile Finder</p>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={toggleTheme} 
+                                className="group relative p-3 rounded-2xl bg-white/20 hover:bg-white/30 backdrop-blur-sm border border-white/30 transition-all duration-300 hover:scale-110"
+                            >
+                                {darkMode ? (
+                                    <i className="fa-solid fa-sun text-xl text-yellow-400 group-hover:rotate-180 transition-transform duration-500"></i>
+                                ) : (
+                                    <i className="fa-solid fa-moon text-xl text-indigo-400 group-hover:rotate-180 transition-transform duration-500"></i>
+                                )}
+                            </button>
+                        </div>
+                    </nav>
+
+                    <main className="pt-28 pb-16 px-6 max-w-7xl mx-auto relative z-10">
+                        {/* Search Section */}
+                        <div className="max-w-2xl mx-auto mb-20 text-center">
+                            <h2 className="text-5xl md:text-6xl font-black bg-gradient-to-r from-white via-slate-100 to-slate-200 bg-clip-text text-transparent mb-6 leading-tight drop-shadow-2xl">
+                                Find GitHub Profiles
+                            </h2>
+                            <p className={`text-xl ${darkMode ? 'text-slate-300 drop-shadow-lg' : 'text-slate-600'} mb-12 max-w-md mx-auto leading-relaxed`}>
+                                Search any GitHub username and explore their repositories, followers, and more.
+                            </p>
+                            
+                            <form onSubmit={handleSubmit} className="relative group">
+                                <div className={`relative ${searchFocused ? 'ring-4 ring-blue-500/50' : ''}`}>
+                                    <i className="fa-solid fa-magnifying-glass absolute left-6 top-1/2 -translate-y-1/2 text-2xl text-slate-400 group-hover:scale-110 transition-transform duration-300"></i>
+                                    <input 
+                                        type="text" 
+                                        value={username} 
+                                        onChange={(e) => setUsername(e.target.value)}
+                                        onFocus={() => setSearchFocused(true)}
+                                        onBlur={() => setSearchFocused(false)}
+                                        placeholder="Enter username (e.g. google, vercel, facebook)" 
+                                        className="w-full pl-20 pr-32 py-6 text-xl rounded-3xl border-2 outline-none transition-all duration-500 shadow-2xl backdrop-blur-sm
+                                            group-hover:shadow-3xl group-hover:-translate-y-1
+                                            dark:bg-slate-800/90 dark:border-slate-700/70 dark:text-white dark:placeholder-slate-500
+                                            dark:focus:border-blue-500/80 dark:hover:bg-slate-800/95
+                                            bg-white/90 border-slate-200/70 text-slate-900 placeholder-slate-500
+                                            focus:border-blue-500/80 hover:bg-white/95 focus:shadow-3xl"
+                                    />
+                                    <button 
+                                        type="submit" 
+                                        disabled={loading}
+                                        className="group/btn absolute right-2 top-2 bottom-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-8 rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 transform disabled:opacity-50 disabled:cursor-not-allowed disabled:from-slate-600 disabled:to-slate-700"
+                                    >
+                                        {loading ? (
+                                            <i className="fa-solid fa-spinner fa-spin"></i>
+                                        ) : (
+                                            <>
+                                                <i className="fa-solid fa-rocket mr-2 group-hover:animate-bounce"></i>
+                                                Search
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            </form>
+                            
+                            {error && (
+                                <div className="mt-6 p-5 bg-gradient-to-r from-red-500/20 to-pink-500/20 border-2 border-red-500/30 text-red-300 rounded-3xl backdrop-blur-sm shadow-xl animate-pulse">
+                                    <i className="fa-solid fa-exclamation-triangle mr-3"></i>
+                                    {error}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Loading Skeleton */}
+                        {loading && (
+                            <div className="max-w-6xl mx-auto space-y-8 animate-pulse">
+                                <div className="h-64 rounded-3xl bg-gradient-to-r from-slate-800/80 to-slate-700/80 backdrop-blur-sm border border-slate-700/70"></div>
+                                <div className="flex gap-6 mb-8 overflow-x-auto pb-4">
+                                    <div className="w-28 h-12 rounded-2xl bg-slate-800/80 backdrop-blur-sm border border-slate-700/70 skeleton"></div>
+                                    <div className="w-32 h-12 rounded-2xl bg-slate-800/80 backdrop-blur-sm border border-slate-700/70 skeleton"></div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {[...Array(6)].map((_, i) => (
+                                        <div key={i} className="h-48 rounded-3xl bg-slate-800/80 backdrop-blur-sm border border-slate-700/70 skeleton"></div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Profile Content */}
+                        {profile && !loading && (
+                            <div className="space-y-10">
+                                {/* Profile Header */}
+                                <div className="relative group">
+                                    <div className="absolute inset-0 bg-gradient-to-r from-slate-800/90 via-slate-900/90 to-slate-950/90 rounded-3xl blur-xl -z-10 animate-pulse-slow"></div>
+                                    <div className={`relative rounded-3xl p-10 border border-white/20 backdrop-blur-2xl shadow-2xl overflow-hidden glass-dark`}>
+                                        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"></div>
+                                        <div className="flex flex-col lg:flex-row gap-8 items-start lg:items-center relative z-10">
+                                            <div className="relative flex-shrink-0">
+                                                <img 
+                                                    src={profile.avatar_url} 
+                                                    className="w-36 h-36 lg:w-44 lg:h-44 rounded-3xl border-4 border-white/30 shadow-2xl ring-4 ring-white/40 hover:ring-blue-500/60 transition-all duration-500 hover:scale-105 hover:-rotate-3" 
+                                                    alt="Avatar" 
+                                                />
+                                                <div className="absolute -bottom-2 -right-2 w-12 h-12 bg-green-500 rounded-2xl shadow-lg flex items-center justify-center animate-bounce">
+                                                    <i className="fa-solid fa-circle-check text-white text-sm"></i>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex flex-wrap items-baseline gap-4 mb-4">
+                                                    <h2 className="text-4xl lg:text-5xl font-black bg-gradient-to-r from-white via-slate-100 to-slate-200 bg-clip-text text-transparent drop-shadow-lg">
+                                                        {profile.name || profile.login}
+                                                    </h2>
+                                                    <a 
+                                                        href={`https://github.com/${profile.login}`} 
+                                                        target="_blank" 
+                                                        className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-slate-700/80 to-slate-800/80 hover:from-slate-600/80 hover:to-slate-700/80 text-white rounded-2xl font-semibold text-sm shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 backdrop-blur-sm border border-slate-600/50"
+                                                    >
+                                                        <i className="fa-brands fa-github"></i>
+                                                        @{profile.login}
+                                                    </a>
+                                                </div>
+                                                
+                                                {profile.bio && (
+                                                    <p className="text-xl text-slate-200 mb-8 leading-relaxed max-w-2xl drop-shadow-md">{profile.bio}</p>
+                                                )}
+                                                
+                                                <div className="flex flex-wrap gap-6 text-sm">
+                                                    {profile.location && (
+                                                        <span className="flex items-center gap-3 px-4 py-3 bg-slate-700/70 backdrop-blur-sm rounded-2xl border border-slate-600/70 text-slate-200">
+                                                            <i className="fa-solid fa-location-dot text-orange-400 text-lg"></i>
+                                                            <span>{profile.location}</span>
+                                                        </span>
+                                                    )}
+                                                    {profile.twitter_username && (
+                                                        <a href={`https://twitter.com/${profile.twitter_username}`} target="_blank" className="flex items-center gap-3 px-4 py-3 bg-sky-500/20 hover:bg-sky-500/30 backdrop-blur-sm rounded-2xl border border-sky-500/50 text-sky-300 hover:text-sky-200 transition-all duration-300">
+                                                            <i className="fa-brands fa-twitter text-xl"></i>
+                                                            Twitter
+                                                        </a>
+                                                    )}
+                                                    {profile.blog && (
+                                                        <a href={profile.blog.startsWith('http') ? profile.blog : `https://${profile.blog}`} target="_blank" className="flex items-center gap-3 px-4 py-3 bg-blue-500/20 hover:bg-blue-500/30 backdrop-blur-sm rounded-2xl border border-blue-500/50 text-blue-300 hover:text-blue-200 transition-all duration-300">
+                                                            <i className="fa-solid fa-globe text-xl"></i>
+                                                            Website
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="flex gap-4 lg:flex-col flex-shrink-0">
+                                                <div className="flex-1 min-w-[120px] p-6 rounded-2xl text-center bg-gradient-to-b from-slate-700/80 to-slate-800/80 backdrop-blur-sm border border-slate-600/70 hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 text-slate-100">
+                                                    <div className="text-3xl lg:text-4xl font-black text-white mb-1">{profile.public_repos.toLocaleString()}</div>
+                                                    <div className="text-slate-300 font-medium uppercase tracking-wider text-xs">Repositories</div>
+                                                </div>
+                                                <div className="flex-1 min-w-[120px] p-6 rounded-2xl text-center bg-gradient-to-b from-emerald-600/90 to-emerald-700/90 backdrop-blur-sm border border-emerald-500/60 hover:shadow-emerald-500/30 hover:shadow-2xl hover:-translate-y-2 transition-all duration-300">
+                                                    <div className="text-3xl lg:text-4xl font-black text-white mb-1">{profile.followers.toLocaleString()}</div>
+                                                    <div className="text-emerald-100 font-medium uppercase tracking-wider text-xs">Followers</div>
+                                                </div>
+                                                <div className="flex-1 min-w-[120px] p-6 rounded-2xl text-center bg-gradient-to-b from-blue-600/90 to-blue-700/90 backdrop-blur-sm border border-blue-500/60 hover:shadow-blue-500/30 hover:shadow-2xl hover:-translate-y-2 transition-all duration-300">
+                                                    <div className="text-3xl lg:text-4xl font-black text-white mb-1">{profile.following.toLocaleString()}</div>
+                                                    <div className="text-blue-100 font-medium uppercase tracking-wider text-xs">Following</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Enhanced Tabs */}
+                                <div className="relative">
+                                    <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-full"></div>
+                                    <div className="flex gap-3 p-1 bg-slate-800/80 backdrop-blur-xl rounded-3xl border border-slate-700/70 overflow-hidden">
+                                        <button 
+                                            onClick={() => setActiveTab('repos')} 
+                                            className={`flex-1 py-4 px-6 rounded-2xl font-semibold transition-all duration-300 relative overflow-hidden group
+                                                ${activeTab === 'repos' 
+                                                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-xl shadow-blue-500/30' 
+                                                    : 'text-slate-300 hover:text-white hover:bg-slate-700/70'
+                                                }`}
+                                        >
+                                            <i className={`fa-solid fa-code-branch mr-2 ${activeTab === 'repos' ? 'text-blue-200' : 'group-hover:scale-110 transition-transform'}`}></i>
+                                            Repositories
+                                        </button>
+                                        <button 
+                                            onClick={() => setActiveTab('followers')} 
+                                            className={`flex-1 py-4 px-6 rounded-2xl font-semibold transition-all duration-300 relative overflow-hidden group
+                                                ${activeTab === 'followers' 
+                                                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-xl shadow-emerald-500/30' 
+                                                    : 'text-slate-300 hover:text-white hover:bg-slate-700/70'
+                                                }`}
+                                        >
+                                            <i className={`fa-solid fa-users mr-2 ${activeTab === 'followers' ? 'text-emerald-200' : 'group-hover:scale-110 transition-transform'}`}></i>
+                                            Followers
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Tab Content */}
+                                {activeTab === 'repos' && (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                        {repos.map(repo => (
+                                            <a 
+                                                key={repo.id} 
+                                                href={repo.html_url} 
+                                                target="_blank" 
+                                                className="group relative block p-8 rounded-3xl border border-slate-700/70 bg-gradient-to-b from-slate-800/80 to-slate-900/80 backdrop-blur-xl hover:bg-slate-800/90 transition-all duration-500 hover:repo-card-hover shadow-2xl hover:shadow-purple-500/20"
+                                            >
+                                                <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-all duration-500">
+                                                    <i className="fa-solid fa-arrow-up-right-from-square text-purple-400 text-2xl bg-purple-500/20 p-3 rounded-2xl backdrop-blur-sm border border-purple-500/40"></i>
+                                                </div>
+                                                
+                                                <div className="flex justify-between items-start mb-6">
+                                                    <h3 className="font-black text-2xl bg-gradient-to-r from-white to-slate-200 bg-clip-text text-transparent group-hover:from-blue-400 group-hover:to-purple-400 transition-all duration-500 line-clamp-2 pr-2 drop-shadow-lg">
+                                                        {repo.name}
+                                                    </h3>
+                                                    {repo.fork && (
+                                                        <span className="px-3 py-1.5 bg-emerald-500/30 text-emerald-300 border border-emerald-500/50 rounded-full text-xs font-semibold">
+                                                            <i className="fa-solid fa-code-branch mr-1"></i>Fork
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                
+                                                {repo.description && (
+                                                    <p className={`text-lg mb-6 leading-relaxed line-clamp-3 text-slate-200 drop-shadow-md`}>
+                                                        {repo.description}
+                                                    </p>
+                                                )}
+                                                
+                                                <div className="flex flex-wrap items-center gap-6 text-sm">
+                                                    {repo.language && (
+                                                        <span className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-slate-700/70 to-slate-600/70 backdrop-blur-sm rounded-2xl border border-slate-600/70 text-slate-200">
+                                                            <span 
+                                                                className="w-3 h-3 rounded-full" 
+                                                                style={{ backgroundColor: getLanguageColor(repo.language) }}
+                                                            ></span>
+                                                            {repo.language}
+                                                        </span>
+                                                    )}
+                                                    <span className="flex items-center gap-2 text-yellow-400">
+                                                        <i className="fa-solid fa-star"></i>
+                                                        <span className="font-bold">{repo.stargazers_count.toLocaleString()}</span>
+                                                    </span>
+                                                    <span className="flex items-center gap-2 text-emerald-400">
+                                                        <i className="fa-solid fa-code-branch"></i>
+                                                        <span className="font-bold">{repo.forks_count.toLocaleString()}</span>
+                                                    </span>
+                                                </div>
+                                            </a>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {activeTab === 'followers' && (
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-6">
+                                        {followers.slice(0, 24).map(follower => (
+                                            <a 
+                                                key={follower.id} 
+                                                href={follower.html_url} 
+                                                target="_blank" 
+                                                className="group relative flex flex-col items-center p-6 rounded-3xl bg-gradient-to-b from-slate-800/70 to-slate-900/70 backdrop-blur-xl border border-slate-700/70 hover:bg-slate-800/90 hover:shadow-2xl hover:shadow-purple-500/20 hover:-translate-y-3 transition-all duration-500"
+                                            >
+                                                <div className="relative mb-4">
+                                                    <img 
+                                                        src={follower.avatar_url} 
+                                                        className="w-20 h-20 rounded-2xl ring-4 ring-white/30 group-hover:ring-blue-500/60 group-hover:scale-110 transition-all duration-500 shadow-2xl" 
+                                                        alt="" 
+                                                    />
+                                                    <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-green-500 rounded-xl flex items-center justify-center shadow-lg ring-2 ring-white/60">
+                                                        <i className="fa-solid fa-plus text-white text-xs"></i>
+                                                    </div>
+                                                </div>
+                                                <span className="text-center font-semibold text-slate-200 group-hover:text-white transition-colors px-2 line-clamp-2 drop-shadow-md">
+                                                    {follower.login}
+                                                </span>
+                                            </a>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </main>
+
+                    {/* Footer */}
+                    <footer className="mt-32 pt-16 pb-12 border-t border-slate-800/70">
+                        <div className="max-w-6xl mx-auto px-6 text-center text-slate-400 text-sm">
+                            <p>Made with ❤️ for developers | Powered by GitHub API</p>
+                        </div>
+                    </footer>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<GitHubProfileFinder />);
+    </script>
+</body>
+</html>
